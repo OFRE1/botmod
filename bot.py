@@ -7,8 +7,7 @@ from discord.ext import commands # hidden prefix
 DEV_ID = 1420049811687604357 # Only justafrog_367 can use this 
 
 # Lấy token từ biến môi trường của Render thay vì viết cứng
-TOKEN = os.getenv("DISCORD_TOKEN")
-bot.run(TOKEN)
+
 
 # Hàm kiểm tra xem người gõ lệnh có phải là Dev không
 def is_dev():
@@ -422,3 +421,6 @@ async def on_message(message: discord.Message):
 
     # Cho phép bot tiếp tục xử lý các lệnh khác (nếu có dùng prefix commands)
     await bot.process_commands(message)
+# end of the line :)    
+TOKEN = os.getenv("DISCORD_TOKEN")
+bot.run(TOKEN)
