@@ -15,7 +15,16 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="sudo ", intents=intents)
 
-
+@bot.event
+async def on_ready():
+    try:
+        # Đồng bộ toàn bộ lệnh Slash lên Discord
+        synced = await bot.tree.sync()
+        print(f"✅ Đã đồng bộ thành công {len(synced)} lệnh slash!")
+    except Exception as e:
+        print(f"❌ Lỗi đồng bộ lệnh: {e}")
+        
+    print(f"🤖 Bot đã đăng nhập thành công với tên: {bot.user}")
 # Hàm kiểm tra xem người gõ lệnh có phải là Dev không
 def is_dev():
     async def predicate(ctx: commands.Context):
