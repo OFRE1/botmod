@@ -6,7 +6,14 @@ from discord.ext import commands # hidden prefix
 
 DEV_ID = 1420049811687604357 # Only justafrog_367 can use this 
 
-# Lấy token từ biến môi trường của Render thay vì viết cứng
+
+
+# --- BƯỚC 1: KHỞI TẠO INTENTS & BOT (PHẢI NẰM TRÊN CÙNG) ---
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+
+bot = commands.Bot(command_prefix="sudo ", intents=intents)
 
 
 # Hàm kiểm tra xem người gõ lệnh có phải là Dev không
