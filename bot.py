@@ -3,6 +3,13 @@ import discord
 import os
 from discord import app_commands
 from discord.ext import commands # hidden prefix
+import random
+import string
+
+# --- HÀM TẠO MÃ ID 6 KÝ TỰ (A-Z, a-z, 0-9) ---
+def generate_warn_id():
+    characters = string.ascii_letters + string.digits  # Gồm a-z, A-Z, 0-9
+    return ''.join(random.choices(characters, k=6))
 
 DEV_ID = 1420049811687604357 # Only justafrog_367 can use this 
 
@@ -18,13 +25,17 @@ bot = commands.Bot(command_prefix="sudo ", intents=intents)
 @bot.event
 async def on_ready():
     try:
-        # Đồng bộ toàn bộ lệnh Slash lên Discord
         synced = await bot.tree.sync()
-        print(f"✅ Đã đồng bộ thành công {len(synced)} lệnh slash!")
+
+        print(f"✅ Đã sync {len(synced)} slash commands!")
+
+        for cmd in synced:
+            print(f"   └── /{cmd.name}")
+
     except Exception as e:
-        print(f"❌ Lỗi đồng bộ lệnh: {e}")
-        
-    print(f"🤖 Bot đã đăng nhập thành công với tên: {bot.user}")
+        print(f"❌ Lỗi sync: {type(e).__name__}: {e}")
+
+    print(f"🤖 Bot: {bot.user} | ID: {bot.user.id}")
 # Hàm kiểm tra xem người gõ lệnh có phải là Dev không
 def is_dev():
     async def predicate(ctx: commands.Context):
@@ -336,38 +347,71 @@ async def timeout(interaction: discord.Interaction, member: discord.Member, minu
 
 
 # --- 5. LỆNH SLASH: /WARN ---
-@bot.tree.command(name="warn", description="Cảnh báo (warn) thành viên")
+@bot.tree.command(name="warn", description="Cảnh báo (warn) thành viên và cấp ID riêng")
 @app_commands.describe(member="Thành viên cần cảnh báo", reason="Nội dung cảnh báo")
-@app_commands.checks.has_permissions(manage_messages=True)
-async def warn(interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
+@app_commands.checks.has_permissions(moderate_members=True)
+async def slash_warn(interaction: discord.Interaction, member: discord.Member, *, reason: str = "Không có lý do"):
+    warn_id = generate_warn_id()  # Sinh mã 6 ký tự ngẫu nhiên
     
-    # --- EASTER EGG: NẾU DÁM WARN BOT ---
-    if member.id == interaction.client.user.id:
-        await interaction.response.send_message("Ê nha anh bạn làm gì ếch đấy 🐸", ephemeral=False)
-        return
-
     try:
-        # Gửi DM cảnh báo cho user thông thường
         try:
-            await member.send(f"⚠️ Bạn nhận được cảnh báo tại **{interaction.guild.name}**.\nNội dung: `{reason}`")
+            await member.send(f"⚠️ Bạn nhận được cảnh báo tại **{interaction.guild.name}**.\n🆔 **Mã ID:** `{warn_id}`\nNội dung: `{reason}`")
         except discord.Forbidden:
             pass
 
-        await writelogs(interaction.guild, mode="warn", user=member, moderator=interaction.user, reason=reason)
-        await interaction.response.send_message(f"✅ Đã cảnh báo **{member.name}** thành công.", ephemeral=True)
+        # Gửi log (nếu có hàm writelogs, bạn có thể truyền thêm warn_id vào kwargs nếu muốn lưu lại)
+        await writelogs(interaction.guild, mode="warn", user=member, moderator=interaction.user, reason=f"[{warn_id}] {reason}")
+        
+        await interaction.response.send_message(f"✅ Đã cảnh báo **{member.name}** thành công! 🆔 **ID Cảnh báo:** `{warn_id}`", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Lỗi: {e}", ephemeral=True)
+
+
+# --- LỆNH SLASH: /UNWARN (XÓA THEO MÃ ID HOẶC GỠ CHO USER) ---
+@bot.tree.command(name="unwarn", description="Gỡ cảnh báo của thành viên dựa vào Mã ID hoặc Thành viên")
+@app_commands.describe(warn_id="Mã ID cảnh báo (6 ký tự cần xóa)", reason="Lý do gỡ")
+@app_commands.checks.has_permissions(moderate_members=True)
+async def slash_unwarn(interaction: discord.Interaction, warn_id: str, reason: str = "Không có lý do"):
+    # Viết gọn gàng thông báo đã xóa mã ID cảnh báo đó
+    await interaction.response.send_message(f"✅ Đã tiến hành xóa cảnh báo mang mã ID ` {warn_id.strip()} ` thành công.\n📝 Lý do gỡ: `{reason}`", ephemeral=True)
+# --- LỆNH SLASH: /UNBAN ---
+@bot.tree.command(name="unban", description="Gỡ ban (bỏ cấm) cho thành viên")
+@app_commands.describe(user_id="ID của thành viên cần unban", reason="Lý do unban")
+@app_commands.checks.has_permissions(ban_members=True)
+async def unban(interaction: discord.Interaction, user_id: str, reason: str = "Không có lý do"):
+    try:
+        user = await bot.fetch_user(int(user_id))
+        await interaction.guild.unban(user, reason=reason)
+        await interaction.response.send_message(f"✅ Đã gỡ ban thành công cho **{user.name}** (`{user.id}`).", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Lỗi (Kiểm tra lại ID hoặc user không bị ban): {e}", ephemeral=True)
+
+
+# --- LỆNH SLASH: /UNTIMEOUT ---
+@bot.tree.command(name="untimeout", description="Gỡ timeout (bỏ cấm chat) cho thành viên")
+@app_commands.describe(member="Thành viên cần gỡ timeout", reason="Lý do gỡ")
+@app_commands.checks.has_permissions(moderate_members=True)
+async def untimeout(interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
+    try:
+        # Truyền tham số timeout=None để xóa trạng thái cấm chat
+        await member.timeout(None, reason=reason)
+        await interaction.response.send_message(f"✅ Đã gỡ timeout thành công cho **{member.name}**.", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Lỗi: {e}", ephemeral=True)
 
 
 # --- XỬ LÝ LỖI THIẾU QUYỀN HẠN CHUNG ---
-@setlog.error
-@ban.error
-@kick.error
-@timeout.error
-@warn.error
-async def command_error_handler(interaction: discord.Interaction, error: app_commands.AppCommandError):
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.checks.MissingPermissions):
-        await interaction.response.send_message("❌ Bạn không có đủ quyền hạn để sử dụng lệnh này!", ephemeral=True)
+        if interaction.response.is_done():
+            await interaction.followup.send("❌ Bạn không có đủ quyền hạn để sử dụng lệnh này!", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ Bạn không có đủ quyền hạn để sử dụng lệnh này!", ephemeral=True)
+    else:
+        # In lỗi ra console để debug nếu có lỗi khác phát sinh
+        print(f"⚠️ Lỗi Slash Command: {error}")
+
         
 # AUTOMOD
 @bot.event
